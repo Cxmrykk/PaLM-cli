@@ -29,8 +29,8 @@ def read_config(path)
         break
       else
         safety_settings.push({
-          "category"  => json["safety_settings"][index]["category"]?.not_nil!("\"safety_settings\" Element #{index} property \"category\" cannot be nil (undefined)!").as_s,
-          "threshold" => json["safety_settings"][index]["threshold"]?.not_nil!("\"safety_settings\" Element #{index} property \"threshold\" cannot be nil (undefined)!").as_s,
+          "category"  => json["safety_settings"][index]["category"]?.not_nil!("index #{index} of \"safety_settings\" property \"category\" cannot be nil (undefined)!").as_s,
+          "threshold" => json["safety_settings"][index]["threshold"]?.not_nil!("index #{index} of \"safety_settings\" property \"threshold\" cannot be nil (undefined)!").as_s,
         })
         index += 1
       end
@@ -46,29 +46,50 @@ def read_config(path)
       "safety_settings" => safety_settings,
     }
   rescue error : NilAssertionError
-    terminate("An error occured whilst reading configuration at #{path}: Missing property: \"#{error}\"")
+    terminate("An error occured whilst reading configuration at #{path}: NilAssertionError: \"#{error}\"")
   rescue error : TypeCastError
-    terminate("An error occured whilst reading configuration at #{path}: Type-cast error! Check that all properties are of the correct type.")
-  rescue error : ParseException
-    terminate("An error occured whilst reading configuration at #{path}: Couldn't parse JSON syntax: \"#{error}\"")
+    terminate("An error occured whilst reading configuration at #{path}: TypeCastError: Check that all properties are of the correct type.")
+  rescue error : JSON::ParseException
+    terminate("An error occured whilst reading configuration at #{path}: JSON::ParseException: \"#{error}\"")
   end
 end
 
 def read_history(path)
   begin
-  rescue
+    json = JSON.parse(File.read(path))
+    {
+      "start_prompt": json["start_prompt"]?.not_nil!("Property \"start_prompt\" cannot be nil (undefined)!").as_s,
+      "input_prompt": json["input_prompt"]?.not_nil!("Property \"input_prompt\" cannot be nil (undefined)!").as_s,
+      "history":      json["history"]?.not_nil!("Property \"history\" cannot be nil (undefined)!").as_s,
+    }
+  rescue error : NilAssertionError
+    terminate("An error occured whilst reading history at #{path}: NilAssertionError: \"#{error}\"")
+  rescue error : TypeCastError
+    terminate("An error occured whilst reading history at #{path}: TypeCastException: Check that all properties are of the correct type.")
+  rescue error : JSON::ParseException
+    terminate("An error occured whilst reading history at #{path}: JSON::ParseException: \"#{error}\"")
   end
 end
 
 def read_api(path)
   begin
-  rescue
+    json = JSON.parse(File.read(path))
+    {
+      "api_key": json["api_key"]?.not_nil!("Property \"api_key\" cannot be nil (undefined)!").as_s,
+      "api_uri": json["api_uri"]?.not_nil!("Property \"api_uri\" cannot be nil (undefined)!").as_s,
+    }
+  rescue error : NilAssertionError
+    terminate("An error occured whilst reading API configuration at #{path}: NilAssertionError: \"#{error}\"")
+  rescue error : TypeCastError
+    terminate("An error occured whilst reading API configuration at #{path}: TypeCastException: Check that all properties are of the correct type.")
+  rescue error : JSON::ParseException
+    terminate("An error occured whilst reading API configuration at #{path}: JSON::ParseException: \"#{error}\"")
   end
 end
 
 # create program file directory
 DIRECTORY_PATH = Path["~/.palm-cli"].expand(home: true)
-if !Dir.exists?(DIRECTORY_PATH)
+unless Dir.exists?(DIRECTORY_PATH)
   begin
     Dir.mkdir(DIRECTORY_PATH)
   rescue error
@@ -78,7 +99,7 @@ end
 
 # create configuration file
 CONFIG_PATH = Path["~/.palm-cli/config.json"].expand(home: true)
-if !File.exists?(CONFIG_PATH)
+unless File.exists?(CONFIG_PATH)
   begin
     File.write(CONFIG_PATH, {
       "temperature":    0.7,
@@ -125,8 +146,8 @@ if !File.exists?(CONFIG_PATH)
 end
 
 # create history file
-HISTORY_PATH = Path["~/.path-cli/history.json"].expand(home: true)
-if !File.exists?(HISTORY_PATH)
+HISTORY_PATH = Path["~/.palm-cli/history.json"].expand(home: true)
+unless File.exists?(HISTORY_PATH)
   begin
     File.write(HISTORY_PATH, {
       "start_prompt": "A conversation between a human and an artificial intelligence AI assistant. The assistant provides detailed, helpful and polite answers to the human's questions or requests, no matter the topic.###Assistant: Hi! how can I help you?",
@@ -140,7 +161,7 @@ end
 
 # create API configuration file
 API_PATH = Path["~/.palm-cli/api.json"].expand(home: true)
-if !File.exists?(API_PATH)
+unless File.exists?(API_PATH)
   begin
     File.write(API_PATH, {
       "api_key": "YOUR_API_KEY_HERE",
@@ -150,3 +171,11 @@ if !File.exists?(API_PATH)
     terminate("An error occured whilst writing API configuration file at #{API_PATH}: #{error}")
   end
 end
+
+config = read_config(CONFIG_PATH)
+history = read_history(HISTORY_PATH)
+api = read_api(API_PATH)
+
+p! config
+p! history
+p! api

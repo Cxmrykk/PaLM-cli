@@ -1,0 +1,13 @@
+name: palm
+version: 0.0.1
+
+authors:
+  - Cxmrykk <140925712+camerikk@users.noreply.github.com>
+
+targets:
+  palm:
+    main: src/palm.cr
+
+crystal: 1.9.2
+
+license: MIT

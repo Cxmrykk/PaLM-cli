@@ -1,3 +1,6 @@
+require "option_parser"
+require "http/headers"
+require "http/client"
 require "json"
 
 def terminate(reason)
@@ -58,9 +61,9 @@ def read_history(path)
   begin
     json = JSON.parse(File.read(path))
     {
-      "start_prompt": json["start_prompt"]?.not_nil!("Property \"start_prompt\" cannot be nil (undefined)!").as_s,
-      "input_prompt": json["input_prompt"]?.not_nil!("Property \"input_prompt\" cannot be nil (undefined)!").as_s,
-      "history":      json["history"]?.not_nil!("Property \"history\" cannot be nil (undefined)!").as_s,
+      "start_prompt" => json["start_prompt"]?.not_nil!("Property \"start_prompt\" cannot be nil (undefined)!").as_s,
+      "input_prompt" => json["input_prompt"]?.not_nil!("Property \"input_prompt\" cannot be nil (undefined)!").as_s,
+      "history"      => json["history"]?.not_nil!("Property \"history\" cannot be nil (undefined)!").as_s,
     }
   rescue error : NilAssertionError
     terminate("An error occured whilst reading history at #{path}: NilAssertionError: \"#{error}\"")
@@ -75,8 +78,8 @@ def read_api(path)
   begin
     json = JSON.parse(File.read(path))
     {
-      "api_key": json["api_key"]?.not_nil!("Property \"api_key\" cannot be nil (undefined)!").as_s,
-      "api_uri": json["api_uri"]?.not_nil!("Property \"api_uri\" cannot be nil (undefined)!").as_s,
+      "api_key" => json["api_key"]?.not_nil!("Property \"api_key\" cannot be nil (undefined)!").as_s,
+      "api_uri" => json["api_uri"]?.not_nil!("Property \"api_uri\" cannot be nil (undefined)!").as_s,
     }
   rescue error : NilAssertionError
     terminate("An error occured whilst reading API configuration at #{path}: NilAssertionError: \"#{error}\"")
@@ -84,6 +87,15 @@ def read_api(path)
     terminate("An error occured whilst reading API configuration at #{path}: TypeCastException: Check that all properties are of the correct type.")
   rescue error : JSON::ParseException
     terminate("An error occured whilst reading API configuration at #{path}: JSON::ParseException: \"#{error}\"")
+  end
+end
+
+def get_response(response)
+  begin
+    json = JSON.parse(response)
+    return json["candidates"][0]["output"].as_s
+  rescue error
+    terminate("An error occured whilst parsing HTTP response: #{error}")    
   end
 end
 
@@ -176,6 +188,82 @@ config = read_config(CONFIG_PATH)
 history = read_history(HISTORY_PATH)
 api = read_api(API_PATH)
 
-p! config
-p! history
-p! api
+OptionParser.parse do |parser|
+  parser.banner = "Usage: palm {flag} [prompt]"
+
+  parser.on "-h", "--help", "Shows this message" do
+    puts parser
+    exit(0)
+  end
+
+  parser.on "-c", "--config-path", "Prints the path to the configuration file" do
+    puts CONFIG_PATH
+    exit(0)
+  end
+
+  parser.on "-l", "--history-path", "Prints the path to the history file" do
+    puts HISTORY_PATH
+    exit(0)
+  end
+
+  parser.on "-a", "--api-path", "Prints the path to the api configuration file" do
+    puts API_PATH
+    exit(0)
+  end
+
+  parser.on "-f", "--forget", "Forgets the existing conversation (Resets history)" do
+    begin
+      history["history"] = history["start_prompt"]
+      File.write(HISTORY_PATH, history.to_json.to_s)
+      exit(0)
+    rescue error
+      terminate("An error occured whilst writing history file at #{HISTORY_PATH}: #{error}")
+    end
+  end
+
+  parser.invalid_option do |flag|
+    STDERR.puts("ERROR: #{flag} is not a valid option.")
+    STDERR.puts(parser)
+    exit(1)
+  end
+
+  unless ARGV.size > 0
+    STDERR.puts("ERROR: No arguments specified.")
+    STDERR.puts(parser)
+    exit(1)
+  end
+end
+
+# construct input text from prompt and arguments
+input = history["history"] + history["input_prompt"].gsub("$INPUT", ARGV.join(" "))
+
+# send a HTTP Post request to Rest API
+url = api["api_uri"].gsub("$PALM_API_KEY", api["api_key"])
+headers = HTTP::Headers{ "Content-Type" => "application/json" }
+response = HTTP::Client.post(url, headers, {
+  "safetySettings" => config["safety_settings"],
+  "stopSequences" => config["stop_sequences"],
+  "temperature" => config["temperature"],
+  "maxOutputTokens" => config["output_length"],
+  "topP" => config["top_p"],
+  "topK" => config["top_k"],
+  "prompt" => {
+    "text" => input
+  }
+}.to_json.to_s)
+
+# allow expected data only
+if response.status_code == 200
+  output = get_response(response.body)
+  puts output
+else
+  terminate("An error occured in the HTTP response: Status code was not 200 (#{response.status_code})\n\nResponse Body:\n#{response.body}\n\nResponse Headers:\n#{response.headers}")
+end
+
+# save output to history file
+begin
+  history["history"] = input + output
+  File.write(HISTORY_PATH, history.to_json.to_s)
+rescue error
+  terminate("An error occured whilst updating history file at #{HISTORY_PATH}: #{error}")
+end

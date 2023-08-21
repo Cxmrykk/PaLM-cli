@@ -1,3 +1,5 @@
+VERSION = "v0.0.1"
+
 require "option_parser"
 require "http/headers"
 require "http/client"
@@ -94,8 +96,10 @@ def get_response(response)
   begin
     json = JSON.parse(response)
     return json["candidates"][0]["output"].as_s
+  rescue error : JSON::ParseException
+    terminate("An error occured whilst parsing HTTP response: Response body was not valid JSON.\n\nResponse Body:\n```\n#{response}\n```\n\nError: #{error}")
   rescue error
-    terminate("An error occured whilst parsing HTTP response: #{error}")    
+    terminate("An error occured whilst parsing HTTP response: #{error}\n\nResponse Body:\n```\n#{response}\n```")
   end
 end
 
@@ -196,6 +200,11 @@ OptionParser.parse do |parser|
     exit(0)
   end
 
+  parser.on "-v", "--version", "Prints the current version" do
+    puts VERSION
+    exit(0)
+  end
+
   parser.on "-c", "--config-path", "Prints the path to the configuration file" do
     puts CONFIG_PATH
     exit(0)
@@ -238,26 +247,30 @@ end
 input = history["history"] + history["input_prompt"].gsub("$INPUT", ARGV.join(" "))
 
 # send a HTTP Post request to Rest API
-url = api["api_uri"].gsub("$PALM_API_KEY", api["api_key"])
-headers = HTTP::Headers{ "Content-Type" => "application/json" }
-response = HTTP::Client.post(url, headers, {
-  "safetySettings" => config["safety_settings"],
-  "stopSequences" => config["stop_sequences"],
-  "temperature" => config["temperature"],
-  "maxOutputTokens" => config["output_length"],
-  "topP" => config["top_p"],
-  "topK" => config["top_k"],
-  "prompt" => {
-    "text" => input
-  }
-}.to_json.to_s)
+begin
+  url = api["api_uri"].gsub("$PALM_API_KEY", api["api_key"])
+  headers = HTTP::Headers{"Content-Type" => "application/json"}
+  response = HTTP::Client.post(url, headers, {
+    "safetySettings"  => config["safety_settings"],
+    "stopSequences"   => config["stop_sequences"],
+    "temperature"     => config["temperature"],
+    "maxOutputTokens" => config["output_length"],
+    "topP"            => config["top_p"],
+    "topK"            => config["top_k"],
+    "prompt"          => {
+      "text" => input,
+    },
+  }.to_json.to_s)
+rescue error
+  terminate("An error occured in the HTTP request: #{error}")
+end
 
 # allow expected data only
 if response.status_code == 200
   output = get_response(response.body)
   puts output
 else
-  terminate("An error occured in the HTTP response: Status code was not 200 (#{response.status_code})\n\nResponse Body:\n#{response.body}\n\nResponse Headers:\n#{response.headers}")
+  terminate("An error occured in the HTTP response: Status code was not 200 (Received #{response.status_code})\n\nResponse Body:\n```\n#{response.body}\n```\n\nResponse Headers:\n```json\n#{response.headers.to_json.to_s}\n```")
 end
 
 # save output to history file

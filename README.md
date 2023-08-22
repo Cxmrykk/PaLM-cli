@@ -1,5 +1,5 @@
 <h1 align="center">~ Palm ~</h1>
-<p align="center">CLI for PaLM Text Generation API</p>
+<p align="center">CLI for PaLM API</p>
 
 ### Installing
 **Using `apt` (Debian-based distros)**

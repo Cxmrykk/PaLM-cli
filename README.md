@@ -24,7 +24,7 @@ git clone https://github.com/Cxmrykk/PaLM-cli.git
 cd PaLM-cli
 crystal build ./src/palm.cr
 ```
-This will produce a binary named `wilt` in the current directory.
+This will produce a binary named `palm` in the current directory.
 
 ### Executing
 ```

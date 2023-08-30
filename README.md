@@ -20,8 +20,8 @@ sudo apt update && sudo apt install palm
 ### Building
 Make sure `crystal` and `git` are installed on the user's system.
 ```sh
-git clone https://github.com/Cxmrykk/PaLM-cli.git
-cd PaLM-cli
+git clone https://github.com/Cxmrykk/Palm-CLI.git
+cd Palm-CLI
 crystal build ./src/palm.cr
 ```
 This will produce a binary named `palm` in the current directory.
